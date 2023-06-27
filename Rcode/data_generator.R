@@ -91,7 +91,7 @@ m1 <- m1 %>% mutate(nuts2 = substr(nuts3, 1, 4)) %>%
                                nchar(nuts3) == 4 ~ 2,
                                nchar(nuts3) == 3 ~ 1,
                                nchar(nuts3) == 2 ~ 0))
-m1 %>% View
+
 m1 <- merge(m1, prop_uni_edu_EU, by = c('nuts2', 'year'), all = TRUE)
 
 nuts2_final <- merge(votes_nuts2 %>% filter(nutslevel == 2), m1 %>% filter(nutslevel == 2), by = c('nuts2', 'year'), all.x = TRUE)
@@ -108,10 +108,6 @@ write.csv(nuts3_final, 'output/nuts3_final.csv')
 nuts3_final <- read_csv("output/nuts3_final.csv")
 nuts2_final <- read_csv("output/nuts2_final.csv")
 
-eu_coord <-  coord_sf(xlim = c(-2500000, 5500000), ylim = c(3000000, 12000000), expand = TRUE)
-eu_aes <- scale_fill_gradientn(colors = c('white', 'red'), na.value = '#d3d3d3')
-
-
 eu <- st_read("input/eu_shapes/eu_shapefile.shp")
 eu <- eu %>% rename(nutslevel = LEVL_CODE, nutscode = NUTS_ID, country_code = CNTR_CODE, mount_type = MOUNT_TYPE, urban_type = URBN_TYPE, coast_type = COAST_TYPE)
 
@@ -122,10 +118,9 @@ nuts2_map <- merge(nuts2_final, eu2, by.x = 'nuts2', by.y = 'nutscode', all.y=TR
 nuts3_map <- merge(nuts3_final, eu3, by.x = 'nuts3', by.y = 'nutscode', all.y=TRUE)
 
 
-typeof(nuts2_map)
 
-write_sf(nuts2_map, 'output/nuts2shp/nuts2_map.shp')
-write_sf(nuts3_map, 'output/nuts3shp/nuts3_map.shp')
+# write_sf(nuts2_map, 'output/nuts2shp/nuts2_map.shp')
+# write_sf(nuts3_map, 'output/nuts3shp/nuts3_map.shp')
 
 
 ##### END OF FILE #####

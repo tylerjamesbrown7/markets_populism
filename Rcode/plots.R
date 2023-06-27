@@ -9,10 +9,35 @@ library(readr)    # quickly reads files into R
 library(sf)
 
 #####
-nuts2_map <- st_read("output/nuts2shp/nuts2_map.shp")
-nuts3_map <- st_read("output/nuts3shp/nuts3_map.shp")
+nuts3_final <- read_csv("output/nuts3_final.csv")
+nuts2_final <- read_csv("output/nuts2_final.csv")
 
+eu <- st_read("input/eu_shapes/eu_shapefile.shp")
+eu <- eu %>% rename(nutslevel = LEVL_CODE, nutscode = NUTS_ID, country_code = CNTR_CODE, mount_type = MOUNT_TYPE, urban_type = URBN_TYPE, coast_type = COAST_TYPE)
 
+eu2 <- eu %>% filter(nutslevel == 2)
+eu3 <- eu %>% filter(nutslevel == 3)
+
+nuts2_map <- merge(eu2, nuts2_final, by.y = 'nuts2', by.x = 'nutscode', all=TRUE)
+nuts3_map <- merge(eu3, nuts3_final, by.y = 'nuts3', by.x = 'nutscode', all=TRUE)
+
+eu_coord <-  coord_sf(xlim = c(-2500000, 5500000), ylim = c(3000000, 12000000), expand = TRUE)
+eu_aes <- scale_fill_gradientn(colors = c('white','black'), na.value = '#d3d3d3')
+
+#####
+
+nuts2_map
+
+# basic plots
+
+nuts3_map <- nuts3_map %>% group_by(country, year, ideology, ideo01) %>% mutate(demeaned = voteshare - mean(voteshare, na.rm=TRUE)) 
+
+nuts3_map %>% View
+
+nuts3_map %>% filter(voteshare < 1 | is.na(voteshare)) %>% group_by(nutscode) %>% arrange(-year) %>% slice(1) %>% ggplot() +
+  geom_sf(aes(fill = demeaned))+
+  eu_coord+
+  eu_aes
 
 
 
