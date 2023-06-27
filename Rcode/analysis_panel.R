@@ -15,6 +15,7 @@ nuts3_final <- nuts3_final %>% group_by(country, year, ideology, ideo01) %>% mut
 nuts3_final <- nuts3_final %>% group_by(nuts3) %>% mutate(l.p = lag(Enterprise_population)/lag(pop_tot))
 nuts3_final <- nuts3_final %>% group_by(nuts3) %>% mutate(d.p = Enterprise_population/pop_tot - l.p)
 nuts3_final <- nuts3_final %>% filter(Business_growth_rate < 500)
+
 ## base model
 model11 <- lm(voteshare ~ I(Enterprise_population/pop_tot) + Business_growth_rate + log(pop_tot) + pop_density + educ_uni + country + as.factor(year), data = nuts3_final %>% filter(ideology == 'non_democ' & ideo01 == 1), weights = log(pop_tot))
 model12 <- lm(voteshare ~ I(Enterprise_population/pop_tot) + Business_growth_rate + log(pop_tot) + pop_density + educ_uni + country + as.factor(year), data = nuts3_final %>% filter(ideology == 'populist' & ideo01 == 1), weights = log(pop_tot))
