@@ -1,6 +1,15 @@
 ##### generate data from scratch
 library(tidyverse)
 library(readxl)
+library(stargazer)
+library(rgdal)    # Updates deprecated maptools functions
+library(maptools) # creates maps and work with spatial files
+library(broom)    # assists with tidy data
+library(ggplot2)  # graphics package
+library(leaflet)  # interactive graphics (output does not show in RMD files)
+library(dplyr)    # joining data frames
+library(readr)    # quickly reads files into R
+library(sf)
 
 ### importing national level election data
 eu_ned_national <- read_excel("input/eu_ned_national.xlsx")
@@ -27,6 +36,10 @@ votes_nuts2 <- votes_ideolog %>% filter(nutslevel == 2)
 
 votes_nuts2 <- votes_nuts2 %>% rename(nuts2 = nuts3)
 votes_nuts3 <- votes_nuts3 %>% mutate(nuts2 = substr(nuts3, 1, 4))
+
+votes_nuts2 <- as.data.frame(votes_nuts2)
+votes_nuts3 <- as.data.frame(votes_nuts3)
+
 
 write.csv(votes_nuts2, 'output/votes_nuts2.csv')
 write.csv(votes_nuts3, 'output/votes_nuts3.csv')
@@ -84,8 +97,35 @@ m1 <- merge(m1, prop_uni_edu_EU, by = c('nuts2', 'year'), all = TRUE)
 nuts2_final <- merge(votes_nuts2 %>% filter(nutslevel == 2), m1 %>% filter(nutslevel == 2), by = c('nuts2', 'year'), all.x = TRUE)
 nuts3_final <- merge(votes_nuts3 %>% filter(nutslevel == 3), m1 %>% filter(nutslevel == 3), by = c('nuts3', 'year'), all.x = TRUE)
 
+nuts2_final <- nuts2_final %>% rename(nutslevel = nutslevel.x) %>% mutate(nutslevel.y = NULL) %>% as.data.frame()
+nuts3_final <- nuts3_final %>% rename(nutslevel = nutslevel.x) %>% mutate(nutslevel.y = NULL) %>% as.data.frame()
+
 write.csv(nuts2_final, 'output/nuts2_final.csv')
 write.csv(nuts3_final, 'output/nuts3_final.csv')
+
+
+##### generating map dataset
+nuts3_final <- read_csv("output/nuts3_final.csv")
+nuts2_final <- read_csv("output/nuts2_final.csv")
+
+eu_coord <-  coord_sf(xlim = c(-2500000, 5500000), ylim = c(3000000, 12000000), expand = TRUE)
+eu_aes <- scale_fill_gradientn(colors = c('white', 'red'), na.value = '#d3d3d3')
+
+
+eu <- st_read("input/eu_shapes/eu_shapefile.shp")
+eu <- eu %>% rename(nutslevel = LEVL_CODE, nutscode = NUTS_ID, country_code = CNTR_CODE, mount_type = MOUNT_TYPE, urban_type = URBN_TYPE, coast_type = COAST_TYPE)
+
+eu2 <- eu %>% filter(nutslevel == 2)
+eu3 <- eu %>% filter(nutslevel == 3)
+
+nuts2_map <- merge(nuts2_final, eu2, by.x = 'nuts2', by.y = 'nutscode', all.y=TRUE)
+nuts3_map <- merge(nuts3_final, eu3, by.x = 'nuts3', by.y = 'nutscode', all.y=TRUE)
+
+
+typeof(nuts2_map)
+
+write_sf(nuts2_map, 'output/nuts2shp/nuts2_map.shp')
+write_sf(nuts3_map, 'output/nuts3shp/nuts3_map.shp')
 
 
 ##### END OF FILE #####

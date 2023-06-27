@@ -1,26 +1,10 @@
 # panel analysis with covariates
-
 library(tidyverse)
-panel_covs_18jun <- read_csv("panel_covs_18jun.csv")
-
-panel <- panel_covs_18jun
-panel <- panel %>% filter(country != 'Luxembourg')
-
-panel <- panel %>% mutate(nuts_level = case_when(
-  nuts3 == nuts2 ~ 2,
-  nuts3 != nuts2 ~ 3
-))
+library(readr)
 
 
-elect <- elect %>% mutate(nuts_level = case_when(
-  nuts3 == nuts2 ~ 2,
-  nuts3 != nuts2 ~ 3
-))
 
-
-elect %>% View
-elect %>% filter(nuts_level == 3 & non_democ == 1 & Business_growth_rate < 500) %>% 
-  ggplot(aes(x = educ_uni, y = voteshare))+
-  geom_point()+
-  geom_smooth(method = 'lm')
+#####
+votes_nuts3 <- read_csv("output/votes_nuts3.csv")
+votes_nuts2 <- read_csv("output/votes_nuts2.csv")
 
