@@ -1,0 +1,1329 @@
+---
+title: 'Analysis of ESS9 Dataset'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+# loading packages and data
+library(haven)
+library(tidyverse)
+library(ggplot2)
+library(estimatr)
+library(corrplot)
+library(psych)
+library(rela)
+rotlab <- theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ess <- readRDS('clean_ess_1sep22.rds')
+ess %>% names
+
+ess$vote
+
+ess <- ess %>% mutate(voted = case_when(
+  vote == 2 ~ 0,
+  vote == 1 ~ 1
+))
+
+names(ess)[which(names(ess) == 'gndr')] <- 'male'
+names(ess)[which(names(ess) == 'agea')] <- 'age'
+unique(ess$cntry_name)
+
+ess <- ess %>% mutate(gov_type = case_when(
+  cntry_name == 'Switzerland' ~ 'federal.republic',
+  cntry_name %in% c('France', 'Portugal', 'Lithuania') ~ 'semi.presidential.republic',
+  cntry_name %in% c('Spain','Netherlands','Belgium','Sweden','Denmark','Norway','United Kingdom') ~ 'parliamentary.monarchy',
+  cntry_name %in% c('Germany',
+'Iceland',
+'Poland',
+'Czechia',
+'Slovakia',
+'Slovenia',
+'Finland',
+'Croatia',
+'Estonia',
+'Latvia',
+'Bulgaria',
+'Italy',
+'Austria',
+'Ireland',
+'Hungary',
+'Serbia') ~ 'parliamentary.republic',
+cntry_name == 'Cyprus' ~ 'presidential.republic'))
+
+
+
+ess_filtered <- ess %>% filter(
+  age %in% 18:64 & pdwrk == 1 & self_emp10 == 0
+) %>% mutate(private = case_when(
+  org_name == 'Private firm' ~ 1,
+  TRUE ~ 0
+))
+
+ess_filtered <- ess_filtered %>% mutate(org_simp = case_when(
+  org_name == 'Private firm' ~ 'private',
+  org_name == 'Central, local government' | org_name == 'Other public sector' ~ 'public',
+  org_name == 'Self-employed' | org_name == 'State-owned enterprise' ~ 'other'
+))
+
+ess_filtered <- ess_filtered %>% filter(!is.na(org_name))
+
+```
+
+# Summary plots
+```{r}
+ess %>% names
+
+ess %>% ggplot(aes(x = org_name, y = populist))+
+  stat_summary_bin(aes(color = as.factor(male)))+
+  coord_flip()
+
+ess %>% ggplot(aes(x = domicil_name, y = populist))+
+  stat_summary_bin()+
+  coord_flip()
+
+ess %>% ggplot(aes(x = domicil_name, y = populist))+
+  stat_summary_bin()+
+  coord_flip()
+
+test <- glm(populist ~ estsz + I(sclmeet + inprdsc + sclact) + male + agea + I(agea**2) + eduyrs + occup_level, ess %>% filter(self_emp10 == 0 & agea %in% 18:64 & cntry == 'IT'), family = binomial())
+
+test %>% summary
+
+ess$org_name %>% unique
+ggplot(ess %>% filter(org_name == 'Private firm'), aes(x = njbspv)) +
+  stat_summary_bin(bins = 10, aes(y=populist), geom = 'line')
+
+boxplot(ess$estsz ~ ess$cntry_name, las = 1, horizontal = TRUE)
+
+
+cor_mat <- cor(ess[,1:46] %>% select_if(is.numeric) %>% select(!emplno),  use = 'pairwise.complete.obs')
+
+
+corrplot(cor_mat)
+
+test %>% summary
+```
+
+
+
+# Analysis using just corporate firms
+```{r}
+corp <- ess %>% filter(org_name == 'Private firm' & !cntry_name %in% c('Bulgaria','Cyprus','Portugal') & agea %in% 18:64 & eduyrs<=26)
+
+# checking balance
+corp %>% group_by(cntry_name) %>% 
+  summarise(count = n()) %>% 
+  arrange(-count) %>% 
+  ggplot(aes(x = reorder(cntry_name, -count), y = count))+
+    geom_bar(stat = 'identity')+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+corp %>% group_by(domicil_name) %>% 
+  summarise(count = n())
+
+corp %>% 
+  ggplot(aes(x = agea))+
+    geom_density(aes(color = cntry_name))
+
+corp %>% filter(!is.na(domicil_name)) %>% ggplot(aes(estsz, populist, color = as.factor(domicil_name)))+
+  stat_summary_bin(geom = 'line')+
+  stat_summary_bin(size = 0.25)+
+  facet_wrap(~domicil_name)
+
+
+
+corp %>% summary
+
+
+testlm <- glm(populist ~ estsz + male + eduyrs + domicil_name + cntry, corp %>% filter(communist10 == 0), family = binomial())
+testlm %>% summary
+plot(model.frame(testlm)$cntry, testlm$residuals)
+```
+
+# Analysis in state-owned firms
+```{r}
+soe_df <- ess %>% filter(org_name == 'Central, local government' & !cntry_name %in% c('Bulgaria','Cyprus','Portugal'))
+
+# checking balance
+soe_df %>% group_by(cntry_name) %>% 
+  summarise(count = n()) %>% 
+  arrange(-count) %>% 
+  ggplot(aes(x = reorder(cntry_name, -count), y = count))+
+    geom_bar(stat = 'identity')+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+soe_df %>% group_by(domicil_name) %>% 
+  summarise(count = n())
+
+soe_df %>% 
+  ggplot(aes(x = agea))+
+    geom_density(aes(color = cntry_name))
+
+soe_df %>% filter(!is.na(domicil_name)) %>% ggplot(aes(estsz, populist, color = as.factor(domicil_name)))+
+  stat_summary_bin(geom = 'line')+
+  stat_summary_bin(size = 0.25)+
+  facet_wrap(~domicil_name)
+
+```
+
+
+
+# Cluster analysis of countries
+```{r}
+library(aplpack)	
+library(fpc)	
+library(cluster)	
+library(ape)	
+library(amap)	
+
+# cluster data frame with only corporate employees
+cluster_df <- ess %>% group_by(cntry_name) %>% select_if(is.numeric) %>% select(!c(vote_code, emplrel, emplno,isco08,populist, polit_rights_2018, polit_rights_2008,total_polit_2018,total_polit_2008)) %>% 
+  summarise_all(funs(mean(.,na.rm = TRUE))) 
+
+
+names(ess)
+cluster_df2 <- ess %>% group_by(cntry_name) %>% dplyr::select(cntry_name, polit_rights_2018, polit_rights_2008,total_polit_2018,total_polit_2008) %>% 
+  summarise_all(funs(mean(.,na.rm=TRUE)))
+
+?dist
+corp_dist <- dist(cluster_df[,-1], method = 'euclidean')
+corp_clust <- hclust(corp_dist)
+corp_clust$labels <- as.character(cluster_df$cntry_name)	
+plot(corp_clust, xlab = "",ylab = "Distance", main = "Clustering for countries")	
+#identify three groups	
+rect.hclust(corp_clust, k = 3)	
+
+cuts <- cutree(corp_clust, k = 5)	
+cuts[cuts == 1]
+
+
+cluster1 <- corp %>% filter(cntry_name %in% c('Austria','Belgium','Denmark','Finland','Germany','Iceland','Ireland','Netherlands','Norway', 'Sweden', 'Switzerland')) %>% filter(agea %in% 18:64)
+
+
+glm(populist ~ estsz + agea + mbtru + rlgdgr + cntry, cluster1, family = binomial()) %>% summary
+
+variances <- ess %>% group_by(cntry_name) %>% summarise(
+  var = var(estsz, na.rm = TRUE)
+) %>% arrange(-var) %>% filter(var > 1.8)
+
+variances
+
+high_var <- ess %>% filter(cntry_name %in% variances$cntry_name)
+unique(high_var$cntry_name)
+
+
+glm(populist ~ org_name + hinctnta + agea + eduyrs + mbtru + rlgdgr + cntry, high_var, family = binomial()) %>% summary
+
+
+ess %>% filter(domicil_name == 'Big city') %>% group_by(region) %>% 
+  summarise(c = n()) %>% arrange(-c) 
+
+
+ess %>% group_by(domicil_name, org_name) %>% 
+  summarise(var = n()) %>% arrange(-var) %>% spread(org_name, var) %>% View
+
+ggplot(ess %>% filter(org_name == 'Private firm') %>% filter(!is.na(domicil_name)), aes(estsz, populist))+
+  stat_summary_bin(aes(color = domicil_name), geom = 'line')
+
+ggplot(ess, aes(domicil_name, populist))+
+  stat_summary_bin(aes(color = cntry_name))+coord_flip()
+
+ess %>% group_by(cntry_name) %>% summarise(c = n()) %>% arrange(c)
+
+
+
+```
+
+
+
+# Regressions
+
+```{r}
+
+
+lm(populist ~ self_emp10 + hinctnta + blgetmg + uemp3m + eduyrs + male + cntry_name, ess_filtered) %>% summary
+
+glm(populist ~ as.numeric(org_name == 'State-owned enterprise') + estsz +  mbtru + domicil_name + agea + hinctnta + eduyrs + male + cntry_name, ess_filtered, family = binomial()) %>% summary
+
+
+ess_filtered %>% filter(org_name == 'State-owned enterprise') %>% ggplot(aes(x = estsz, y = populist))+
+  stat_summary_bin(aes(color = cntry_name))+
+  stat_summary_bin(aes(color = cntry_name), geom = 'line')+
+  facet_wrap(~cntry_name)
+
+
+ess_filtered %>% filter(!is.na(domicil_name)) %>% ggplot(aes(x = org_name))+
+  geom_histogram()+
+  facet_wrap(~cntry_name)
+
+
+# look at proportion of private company employed peoples vs populist vote share
+
+
+
+
+
+
+```
+
+Prop private
+```{r}
+
+ess %>% group_by(gov_type) %>% 
+  select_if(is.numeric) %>% summarise_all(funs(mean(., na.rm = TRUE))) %>% View
+
+
+
+
+ess_filtered %>% filter(age %in% 18:64 & pdwrk == 1 & self_emp10 == 0) %>% group_by(cntry_name) %>% 
+  summarise(popul = mean(populist, na.rm = TRUE),
+            private = mean(org_name == 'Private firm', na.rm = TRUE),
+            communist10 = communist10) %>% 
+  slice(1) %>% 
+  ggplot(aes(x = private, y = popul, label = cntry_name, color = as.factor(communist10)))+
+  geom_point()+
+  geom_text(vjust = 2)+
+  geom_smooth(aes(color = as.factor(communist10)), method = 'lm')
+
+ess_filtered %>% filter(age %in% 18:64 & pdwrk == 1 & self_emp10 == 0) %>% group_by(cntry_name) %>% summarise(voted = mean(voted, na.rm = TRUE),
+            private = mean(org_name == 'Private firm', na.rm = TRUE),
+            communist10 = communist10) %>% 
+  slice(1) %>% 
+  ggplot(aes(x = private, y = voted, label = cntry_name, color = as.factor(communist10)))+
+  geom_point()+
+  geom_text(vjust = 2)+
+  geom_smooth(aes(color = as.factor(communist10)), method = 'lm')
+
+# more cluster analysis
+
+
+
+ess_filtered %>% 
+  ggplot(aes(x = org_name, y = populist))+
+  stat_summary_bin()+
+  facet_wrap(~gov_type+communist10)
+
+
+# by political system
+
+
+unique(ess_filtered$cntry_name)
+
+
+ess_filtered %>% group_by(cntry_name) %>% 
+  summarise(freedom_status_2018, freedom_status_2008) %>% slice(1) %>% View
+
+
+
+lm(populist ~ estsz + occup_level + domicil_name + mbtru + hinctnta + agea + I(agea**2) + I(sclmeet + inprdsc + sclact) + male + blgetmg + rlgdgr + blgetmg + uemp3m + cntry, ess_filtered) %>% summary()
+
+?summary
+
+
+
+
+
+
+
+
+
+
+lm(populist ~ private + hinctnta + agea + I(agea**2) + I(sclmeet + inprdsc + sclact) + gov_type + male + blgetmg + uemp3m + region, ess_filtered) %>% summary
+
+lm(populist ~ org_name + hinctnta + agea + I(agea**2) + I(sclmeet + inprdsc + sclact) + gov_type + male + blgetmg + uemp3m + region, ess_filtered) %>% summary
+
+lm(populist ~ org_name + hinctnta + agea + I(agea**2) + I(sclmeet + inprdsc + sclact) + gov_type + male + blgetmg + uemp3m + region, ess_filtered) %>% summary
+
+ess_filtered %>% group_by(org_name) %>% 
+  summarise(mean(populist))
+
+
+
+
+
+
+
+
+```
+
+
+# Maps
+```{r}
+
+install.packages(c("cowplot", "googleway", "ggplot2", "ggrepel", 
+"ggspatial", "libwgeom", "sf", "rnaturalearth", "rnaturalearthdata"))
+library("ggplot2")
+theme_set(theme_bw())
+library("sf")
+
+library("rnaturalearth")
+library("rnaturalearthdata")
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+class(world)
+
+ggplot(data = world, aes(label = name)) +
+    geom_sf()+
+    geom_text()+
+    coord_sf(xlim = c(-26, 42), ylim = c(34, 67), expand = FALSE)
+
+library(sf)
+library(tmap)
+library(tmaptools)
+
+map <- st_read('CNTR_RG_03M_2020_4326.shp')
+map <- map %>% filter(NAME_ENGL %in% unique(ess$cntry_name))
+
+ess %>% names
+
+summ <- ess_filtered %>% mutate(soe = as.numeric(org_name == 'State-owned enterprise')) %>%  group_by(cntry_name) %>% 
+  select_if(is.numeric) %>% 
+  summarise_all(funs(mean(., na.rm = TRUE)))
+
+?inner_join
+
+names(summ)[1] <- 'NAME_ENGL'
+map_merge <- inner_join(summ, map, by = 'NAME_ENGL')
+
+class(map_merge)
+
+str(map_merge)
+ggplot(map_merge, aes(geometry = geometry))+
+  geom_sf(aes(fill = communist10))+
+  coord_sf(xlim = c(-26, 42), ylim = c(34, 67), expand = FALSE)+
+  scale_fill_gradient(low = 'white', high = 'red')
+```
+
+
+SAT 12:45 - 
+
+
+# Worthwhile regressions
+```{r}
+
+# estsz with negative coefficient
+lm(populist ~ estsz + occup_level + domicil_name + mbtru + hinctnta + agea + I(agea**2) + I(sclmeet + inprdsc + sclact) + male + blgetmg + rlgdgr + blgetmg + uemp3m + cntry, ess_filtered) %>% summary()
+
+
+# private firm with positive coefficient
+lm(populist ~ private + occup_level + domicil_name + mbtru + hinctnta + agea + I(agea**2) + I(sclmeet + inprdsc + sclact) + male + blgetmg + rlgdgr + blgetmg + uemp3m + cntry, ess_filtered) %>% summary()
+
+
+# w/ interaction term
+lm(populist ~ private + estsz + I(private*estsz) + occup_level + domicil_name + mbtru + hinctnta + agea + I(agea**2) + I(sclmeet + inprdsc + sclact) + male + blgetmg + rlgdgr + blgetmg + uemp3m + cntry, ess_filtered) %>% summary()
+
+# state-owned enterprise effect
+lm(populist ~ as.numeric(org_name == 'State-owned enterprise') + estsz + I(as.numeric(org_name == 'State-owned enterprise')*estsz) + occup_level + domicil_name + mbtru + hinctnta + agea + I(agea**2) + I(sclmeet + inprdsc + sclact) + male + blgetmg + rlgdgr + blgetmg + uemp3m + cntry, ess_filtered) %>% summary()
+
+
+library(stargazer)
+lm(voted ~ as.numeric(org_name == 'Private firm') + estsz + hinctnta + occup_level + male + domicil_name + rlgdgr + age + I(age**2) + sclmeet + inprdsc + sclact + uemp3m + cntry_name, ess_filtered) %>% stargazer(type = 'text')
+
+
+
+
+
+
+# country effects
+cntry_means <- ess_filtered %>%
+  group_by(cntry_name) %>% 
+summarise(private = mean(as.numeric(org_name == 'Private firm'), na.rm = TRUE),
+          communist10 = mean(communist10),
+          populist = mean(populist, na.rm=TRUE),
+          voted = mean(voted),
+          gov_type = gov_type) %>% slice(1)
+cntry_means
+cntry_means %>% filter(gov_type != 'semi.presidential.republic') %>% ggplot(aes(x = private, y = voted))+
+  geom_point(aes(color = gov_type))+
+ geom_text (label = cntry_means %>% filter(gov_type != 'semi.presidential.republic') %>% pull(cntry_name), vjust = 1.5)+
+  geom_smooth(aes(color = communist10), method = 'lm', se = TRUE)
+
+
+?geom_smooth
+
+
+
+ess %>% group_by(org_name) %>% 
+  summarise_all(funs(mean(.,na.rm = TRUE))) %>% View
+
+ess %>% ggplot(aes(x = org_name, y = lrscale))+
+  stat_summary_bin()
+
+
+
+
+
+
+
+
+
+```
+
+
+```{r}
+ess$org_name %>% unique %>% length
+ess %>% group_by(cntry_name, org_name) %>% 
+  summarise(voted = mean(voted),
+            private = mean(as.numeric(org_name == 'Private firm')),
+            communist10 = as.factor(mean(communist10))) %>% 
+  filter(!is.na(org_name)) %>% 
+ggplot(aes(x = reorder(cntry_name, voted), y = voted))+
+  stat_summary_bin(aes(color = org_name, pch = (communist10)))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+  
+ # geom_smooth(formula = y~ x + I(x**4) + I(x**3) + I(x**2))
+
+ess %>% group_by(voted) %>% summarise_all(funs(mean(., na.rm = TRUE))) %>% t %>% View
+
+ess %>% 
+  ggplot(aes(x = lrscale))+
+  geom_histogram()+
+  facet_wrap(~org_name)
+
+ess %>% ggplot(aes(x = lrscale, y = populist))+
+  stat_summary_bin(aes(color = as.factor(mbtru)))+
+  stat_summary_bin(aes(y = voted))
+
+lm(populist*voted ~ estsz + occup_level + domicil_name + mbtru + hinctnta + age + I(age**2) + I(sclmeet + inprdsc + sclact) + male + blgetmg + rlgdgr + blgetmg + uemp3m + cntry, ess_filtered %>% filter(lrscale != 5 & org_name == 'Private firm')) %>% summary()
+
+??MASS
+
+lm(voted ~ mbtru + lrscale + age + male + eduyrs, ess) %>% summary
+
+
+ggplot(ess_filtered, aes(x = org_name, y = voted))+
+  stat_summary_bin()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggplot(ess_filtered, aes(x = org_name, y = voted))+
+  stat_summary_bin(aes(color = as.factor(lrscale)))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggplot(ess_filtered %>% filter(!is.na(org_name)), aes(x = lrscale, y = populist))+
+  stat_summary_bin(bins = 11, aes(color = as.factor(org_name == 'Private firm'), pch = as.factor(estsz)))+
+  scale_color_discrete(name = 'Private firm')
+
+
+ess_filtered %>% ggplot(aes(x = lrscale, y = voted))+
+  stat_summary_bin(aes(color = 'Voted'))+
+  stat_summary_bin(aes(y = populist, color = 'Voted populist'), geom = 'line')+
+  ylab('%')
+
+
+```
+
+# finding best model
+```{r}
+library(MASS)
+model_df <- ess_filtered %>% dplyr::select(!c(emplno,jbspv,njbspv,freedom_status_2018,freedom_status_2008,vote,party_name,cntry,anweight,isco08,occup,self_emp10,emplrel,pdwrk,org_name,tporgwk,empName,total_polit_2018,total_polit_2008,civil_lib_2018,civil_lib_2008,polit_rights_2008,polit_rights_2018,region,uemp5yr,wrkac6m,uempla,uempli,uemp12m,party_code))
+
+
+fit <- lm(populist ~., na.omit(model_df))
+step <- stepAIC(fit, direction="both")
+step
+
+model1 <- lm(populist ~ estsz + hinctnta + occup_level + male + domicil_name + rlgdgr + age + I(age**2) + sclmeet + inprdsc + sclact + uemp3m + cntry_name, ess_filtered %>% filter(voted == 1)) 
+
+
+preds2 <- predict(model1, ess_filtered %>% filter(voted == 1))
+
+preds2
+
+
+pred_df <- cbind(ess_filtered %>% filter(voted == 0), preds)
+
+pred_df2 <- cbind(ess_filtered %>% filter(voted == 1), preds2)
+pred_df2
+
+ess_filtered %>% filter(voted == 1) %>% summarise(mean = mean(populist))
+
+train_df <- ess_filtered %>% filter(voted == 1)
+
+mean(pred_df$preds, na.rm = TRUE)
+
+ess_filtered %>% filter(voted == 1) %>%  ggplot(aes(x = org_name, y = populist))+
+  stat_summary_bin()
+
+
+pred_df  %>%  ggplot(aes(x = org_name, y = preds))+
+  stat_summary_bin()
+
+ess_filtered %>% group_by(voted) %>% summarise_all(funs(mean(.,na.rm=TRUE))) %>% t%>% View
+
+library(cobalt)
+
+bal.tab(model_df %>% dplyr::select(!voted), treat = model_df$voted)
+rbind(pred_df, model_df)
+
+rot_lab <- theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+ggplot(ess_filtered %>% filter(voted == 1), aes(x = org_name, y = populist))+
+  stat_summary_bin(aes(color = 'real'))+
+  stat_summary_bin(data = pred_df2, aes(x = org_name, y = preds2, color = 'synthetic voters'))+
+  stat_summary_bin(data = pred_df, aes(x = org_name, y = preds, color = 'synthetic non-voters'))+
+  rot_lab
+
+ggplot(ess_filtered %>% filter(voted == 1), aes(x = lrscale, y = populist))+
+  stat_summary_bin(aes(color = 'real'))+
+  stat_summary_bin(data = pred_df2, aes(x = lrscale, y = preds2, color = 'synthetic voters'))+
+  stat_summary_bin(data = pred_df, aes(x = lrscale, y = preds, color = 'synthetic non-voters'))
+
+ggplot(ess_filtered %>% filter(voted == 1&org_name == 'Private firm'), aes(x = lrscale, y = populist))+
+  stat_summary_bin(aes(color = 'real'))+
+  stat_summary_bin(data = pred_df2, aes(x = lrscale, y = preds2, color = 'synthetic voters'))+
+  stat_summary_bin(data = pred_df, aes(x = lrscale, y = preds, color = 'synthetic non-voters'))
+
+
+
+```
+
+<!-- 30 Jul 2022 12:45-14:45 -->
+
+# Now looking at what drives this variance in state-owned enterprise differences
+```{r}
+ess_filtered %>% filter(org_name == 'Private firm' | org_name == 'State-owned enterprise') %>% 
+  group_by(org_name) %>% 
+  select_if(is.numeric) %>% 
+  summarise_all(funs(mean(., na.rm = TRUE))) %>% t %>% View
+
+## check relative proportion of votes in SOE and private in communist countries
+
+
+ess_filtered %>% filter(org_name == 'Private firm' | org_name == 'State-owned enterprise') %>% 
+  ggplot(aes(x = lrscale, y = voted, color = org_name))+
+  stat_summary_bin()
+
+ess_filtered %>% 
+  filter(org_name == 'Private firm' | org_name == 'State-owned enterprise') %>% 
+  select_if(is.numeric) %>% 
+  mutate_all(funs(scale(.))) %>% 
+  cbind(org_name = ess_filtered %>% 
+  filter(org_name == 'Private firm' | org_name == 'State-owned enterprise') %>% pull(org_name)) %>% 
+  pivot_longer(!org_name, names_to = 'variable', values_to = 'value') %>% 
+  filter(!is.na(value)) %>% 
+  ggplot(aes(x = value, color = org_name))+
+  geom_density()+
+  facet_wrap(~variable, scales = 'free')
+
+ess_filtered %>% group_by(voted) %>% 
+  select_if(is.numeric) %>% 
+  pivot_longer(!voted, names_to = 'var', values_to = 'val') %>% 
+  ggplot(aes(x = val, color = as.factor(voted))) + 
+  geom_density()+
+  facet_wrap(~var, scale = 'free')
+```
+<!-- 30 JUL 20:15-21:15 -->
+
+# Grouping by organization 
+```{r}
+
+org_cluster_df <- ess_filtered %>% group_by(org_name) %>% select_if(is.numeric) %>% summarise_all(funs(mean(.,na.rm=TRUE)))
+
+org_cluster_df$emplno <- NULL
+
+dist_org <- dist(org_cluster_df[,-1], method = 'euclidean')
+
+org_clust <- hclust(dist_org)
+org_clust$labels <- as.character(org_cluster_df$org_name)	
+
+plot(org_clust, xlab = "",ylab = "Distance", main = "Clustering for organizations")	
+#identify three groups	
+rect.hclust(org_clust, k = 4)	
+
+cuts <- cutree(corp_clust, k = 5)	
+cuts[cuts == 1]
+
+
+
+
+ess$org_name %>% unique()
+# grouping by 'public sector' 'private' and 'SOE/self-employed/other'
+ess_filtered %>% filter(!is.na(org_simp)) %>%  ggplot(aes(x = lrscale, y = voted, color = org_simp)) +
+  stat_summary_bin(bins = 11, geom = 'line')+
+    stat_summary_bin(bins = 11)+
+  stat_summary_bin(aes(y = populist, color = org_simp))+
+  annotate("text", x=3, y=0.65, label= "% voting")+
+    annotate("text", x=3, y=0.275, label= "% of voters voting populist")
+
+# our research question is now: Do people in private firms undervote because they are in private firms? Does this drive less populist voting in private firms?
+```
+
+
+<!-- 31 Jul 2022 15:00-16:33  -->
+<!-- 31 Jul 2022 17:00-17:15, 18:00- -->
+
+
+```{r}
+# now trying to run a regression to estimate the effect of working in a corporation on political ideology
+
+# maybe trying an instrumented approach that way we have good validity
+
+corrplot(cor(ess_filtered %>% select_if(is.numeric) %>% filter(eduyrs<28), use = 'pairwise.complete.obs'))
+
+ess_filtered %>% group_by(eduyrs) %>% summarise(n()) %>% View
+
+ggplot(ess_filtered %>% filter(eduyrs<28), aes(x = org_name, y = populist))+
+  stat_summary_bin(aes(color = as.factor(communist10)))
+
+lm(private ~ eduyrs + rlgdgr + male + age + I(age**2) + cntry_name + domicil_name + blgetmg + uemp3m + mbtru, ess_filtered %>% filter(eduyrs < 28)) %>% summary()
+
+library(AER)
+
+fs = lm(private ~ eduyrs + rlgdgr + male + age + I(age**2) + cntry_name + domicil_name + blgetmg + uemp3m + mbtru, ess_filtered %>% filter(eduyrs < 28))
+# null first-stage (i.e. exclude IVs):
+fn = lm(private ~ rlgdgr + male + age + I(age**2) + cntry_name + domicil_name + blgetmg + uemp3m + mbtru, ess_filtered %>% filter(eduyrs < 28))
+
+
+# simple F-test
+waldtest(fs, fn)
+waldtest(fs, fn, vcov = vcovHC(fs, type="HC0"))
+
+ess_filtered %>% View
+ 2) + domicil_name + blgetmg + uemp3m + mbtru + cntry_name, ess_filtered %>% mutate(cntry_name = relevel(as.factor(cntry_name), ref = 'France')))
+
+test_lm %>% summary
+
+test <- ess_filtered %>% group_by(cntry_name) %>% summarise_all(funs(mean(., na.rm = TRUE))) %>% rbind(c( colMeans(ess_filtered %>% summarise_all(funs(mean(.,na.rm=TRUE))), na.rm = TRUE))) 
+
+
+test[30,1] <- 'average'
+
+dist_test <- dist(test[,-1]) %>% as.matrix
+
+sort(dist_test[30,])
+
+
+ess_filtered %>% group_by(cntry_name) %>% 
+  summarise(private = mean(private),
+    voted = mean(voted*private),
+    communist10 = mean(communist10)) %>% 
+  ggplot(aes(x = private, y=voted))+
+  geom_point(aes(color = as.factor(communist10)))+
+  geom_text(label = .$cntry_name)
+  
+
+
+```
+
+
+```{r}
+non_com <- ess_filtered %>% filter(communist10 == 0)
+
+## one for communist countries 
+## non for non-communist countries
+
+
+
+
+```
+
+
+- heterogeneous effects in communist vs. noncommunist (populist)
+- although the SAME effect in voting
+- 
+
+
+# Analysis from August 2022
+20:25-21:00
+1 sept 09:00- (4.5hrs)
+03 sept 13:15-16:15
+05 sept 11:30-12:30, 14:00-15:30
+08 Sept 9:00-
+
+This section will specifically focus on two-way variation on the firm and context level
+
+Our sample: Ages 18-64, currently doing paid work, not self-employed.
+
+## Descriptive statistics
+```{r}
+# first we want to look at which countries we have included
+commcols <- scale_color_manual(name = 'Context',values = c('steelblue','#cd0000'), labels = c('Non-Communist','Communist'))
+
+
+ess_filtered %>% group_by(cntry_name) %>% 
+  summarise(populist = mean(populist, na.rm=TRUE),
+            voted = mean(voted, na.rm = TRUE),
+            communist = mean(communist10)) %>% 
+  ggplot(aes(x = voted, y = populist, color = as.factor(communist)))+
+  geom_text(aes(label = cntry_name))+
+  scale_color_manual(name = 'Context',values = c('steelblue','#cd0000'), labels = c('Non-Communist','Communist'))
+
+ess_filtered %>% group_by(cntry_name) %>% 
+  summarise_all(funs(mean(.,na.rm=TRUE))) %>% View
+
+ess_filtered %>% group_by(cntry_name) %>% 
+  summarise(comm=mean(communist10)) %>% arrange(comm) %>% View
+
+## overall presence of populism
+ess_filtered %>% group_by(cntry_name) %>% 
+  summarise(populist = mean(populist),
+            communist = mean(communist10),
+            lrscale = mean(lrscale, na.rm=TRUE)) %>% 
+  ggplot(aes(x = reorder(cntry_name, -populist), y = populist))+
+  geom_bar(stat = 'identity', aes(fill = as.factor(communist)))+
+  rotlab+
+  scale_fill_manual(name = 'Context',values = c('steelblue','#cd0000'), labels = c('Non-Communist','Communist'))+
+  xlab('Country')+
+  ylab('% voting for a populist party in last election')+
+  ggtitle('Populist voting in European countries, 2018')
+
+## voting behavior in each country
+
+ess_filtered %>% group_by(cntry_name) %>% 
+  summarise(voted = mean(voted, na.rm=TRUE),
+            communist = mean(communist10)) %>% 
+  ggplot(aes(x = reorder(cntry_name, -voted), y = voted))+
+  geom_bar(stat = 'identity', aes(fill = as.factor(communist)))+
+  rotlab+
+  scale_fill_manual(name = 'Context',values = c('steelblue','#cd0000'), labels = c('Non-Communist','Communist'))+
+  xlab('Country')+
+  ylab('% voting in last election')+
+  ggtitle('Voter turnout estimates in European countries, 2018')
+
+## diff in diff
+
+ess_filtered %>% ggplot(aes(x = org_name, y = voted))+
+  stat_summary_bin(aes(color = as.factor(communist10)), position = position_dodge(width = 0.2))+
+  scale_color_manual(name = 'Context',values = c('steelblue','#cd0000'), labels = c('Non-Communist','Communist'))+
+  xlab('organizational type')+
+  ylab('% voting in last election')+
+  ggtitle('Voter turnout estimates in European countries, 2018 by firm type')
+
+ess_filtered %>% ggplot(aes(x = org_name, y = populist))+
+  stat_summary_bin(aes(color = as.factor(communist10)), position = position_dodge(width = 0.2))+
+  scale_color_manual(name = 'Context',values = c('steelblue','#cd0000'), labels = c('Non-Communist','Communist'))+
+  xlab('organizational type')+
+  ylab('% voting in last election')+
+  ggtitle('Populist voting estimates in European countries, 2018 by firm type')
+
+
+## ideological basis for voting
+
+ess_filtered %>% ggplot(aes(x = lrscale, y = voted))+
+  stat_summary_bin(aes(color = as.factor(communist10)), bins = 11)+
+  scale_color_manual(name = 'Context',values = c('steelblue','#cd0000'), labels = c('Non-Communist','Communist'))+
+  xlab('LR-scale orientation')+
+  ylab('% voting in last election')+
+  ggtitle('Voter turnout estimates in European countries, 2018 by ideological position')
+
+ess_filtered %>% filter(!is.na(org_name)) %>% ggplot(aes(x = lrscale, y = populist))+
+  stat_summary_bin(aes(color = as.factor(communist10), linetype = as.factor(org_name == 'Private firm')), bins = 11, geom = 'line')+
+  scale_color_manual(name = 'Context',values = c('steelblue','#cd0000'), labels = c('Non-Communist','Communist'))+
+  xlab('LR-scale orientation')+
+  ylab('% voting populist in last election')+
+  ggtitle('Populist voting estimates in European countries, 2018 by firm type')+
+  scale_linetype_manual(name = 'Firm type',values = c(1,2), labels = c('Non-private','private'))
+
+
+# let's see how things trend with populist voting
+
+slim_df <- ess_filtered %>% dplyr::select(lrscale, mbtru, estsz, hinctnta, sclmeet, inprdsc, sclact, age, rlgdgr, eduyrs, male, blgetmg, uemp3m, communist10, private, populist) 
+
+slim_df2 <- ess_filtered %>% dplyr::select(lrscale, mbtru, estsz, hinctnta, sclmeet, inprdsc, sclact, age, rlgdgr, eduyrs, male, blgetmg, uemp3m, communist10, private, voted) 
+
+slim_df %>% pivot_longer(!populist, names_to = 'var', values_to = 'val') %>% 
+  ggplot(aes(x = val, y = populist))+
+  stat_summary_bin(aes(color = var))+
+  facet_wrap(~var, scales='free')+
+  ggtitle('Populist voting')
+
+slim_df2 %>% pivot_longer(!voted, names_to = 'var', values_to = 'val') %>% 
+  ggplot(aes(x = val, y = voted))+
+  stat_summary_bin(aes(color = var))+
+  facet_wrap(~var, scales='free')+
+  ggtitle('Voted at all')
+
+## now we need to compare covariates across both communist and non communist as well as voted and not voted
+### first comparing across comm and non comm
+
+ess_filtered %>% group_by(communist10) %>% 
+  select_if(is.numeric) %>% 
+  summarise_all(funs(mean(., na.rm=TRUE))) %>%View
+
+
+
+
+
+
+```
+
+
+## Factor analysis and PCA
+```{r}
+
+names(comm_)
+fact_df <- comm_df %>% select(lrscale, mbtru, estsz, hinctnta, sclmeet, inprdsc, sclact, age, rlgdgr, eduyrs, male, blgetmg, uemp3m, private, soe) %>% filter(complete.cases(.))
+
+	
+#try 3 factor solution	
+?factanal
+fact1 <- factanal(fact_df, factors = 3, rotation = "promax")	
+fact1	
+	
+
+
+#factors 1 and 3	
+plot(fact1$loadings[, c(1,2)], pch = 18, col = 'red')	
+abline(h = 0)	
+abline(v = 0)	
+text(fact1$loadings[, c(1,2)], labels = names(fact_df), cex = 0.8)	
+
+#factors 1 and 3	
+plot(fact1$loadings[, c(1,3)], pch = 18, col = 'red')	
+abline(h = 0)	
+abline(v = 0)	
+text(fact1$loadings[, c(1,3)], labels = names(fact_df), cex = 0.8)	
+
+#factors 1 and 3	
+plot(fact1$loadings[, c(2,3)], pch = 18, col = 'red')	
+abline(h = 0)	
+abline(v = 0)	
+text(fact1$loadings[, c(2,3)], labels = names(fact_df), cex = 0.8)	
+	
+#loading plot for 2 factor model	
+plot(fact0$loadings, pch = 18, col = 'red')	
+abline(h = 0)	
+abline(v = 0)	
+text(fact0$loadings, labels = names(WB2), cex = 0.8)	
+
+
+
+
+pc1 <- princomp(fact_df, cor = TRUE)	
+	
+	
+# Objects created : loadings are the eigenvectors, scores are, well, the scores, sdev is sqrt of eigenvalues!	
+	
+	
+names(pc1)	
+	
+#print results - note that the cutoff options shows all loadings no matter how small	
+print(summary(pc1), digits = 2, loadings = pc1$loadings, cutoff = 0.4)	
+	
+
+
+
+
+```
+
+## causal inference portion
+```{r}
+
+# first, we need to see if there is balance in the covariates
+## overall populist voting by block
+ess_filtered %>% ggplot(aes(x = as.factor(private), y = populist, color = as.factor(communist10)))+
+  stat_summary_bin()+
+  scale_color_manual(values = c('steelblue','violet'))
+
+ess_filtered %>% ggplot(aes(x = as.factor(org_name), y = populist, color = as.factor(communist10)))+
+  stat_summary_bin()+
+  scale_color_manual(values = c('steelblue','violet'))
+
+
+
+## let's check across communist and non-communist first
+ess_filtered %>% select_if(is.numeric) %>% 
+  select(!c(anweight, blgetmg, domicil, emplno, emplrel, isco08, njbspv, pdwrk, self_emp10, tporgwk)) %>% 
+  pivot_longer(!communist10, names_to = 'var', values_to = 'val') %>% 
+  ggplot(aes(x = val, fill = as.factor(communist10), alpha = 0.5)) +
+  geom_density()+
+  facet_wrap(~var, scales = 'free')+
+  scale_fill_manual(name = 'Context',values = c('steelblue','#cd0000'), labels = c('Non-Communist','Communist'))
+
+
+## composition across firms in diff blocs, percentage in each firm
+ess_filtered %>% group_by(communist10, org_name) %>% 
+  mutate(communist10 = case_when(
+    communist10 == 0 ~ 'non communist',
+    communist10 == 1 ~ 'communist')) %>% 
+  summarise(n=n()) %>% 
+  mutate(prop = round(n/sum(n), 3)) %>% 
+  mutate(n = NULL) %>% 
+  spread(communist10, prop) %>% 
+  rbind(c('total',1,1))
+
+
+# number in each firm type 
+ess_filtered %>% group_by(communist10, org_name) %>% 
+  mutate(communist10 = case_when(
+    communist10 == 0 ~ 'non communist',
+    communist10 == 1 ~ 'communist')) %>% 
+  summarise(n=n()) %>% 
+  spread(communist10, n) %>% 
+  rbind(c('total',sum(.$communist),sum(.$`non communist`)))
+
+## composition 
+## we have some endogenous structural factors to consider, like political freedom and civil liberties
+## but there is a bi-directional causal relationship, so maybe we don't worry about it
+
+### Hypothesis: The post-Communist economic context mediates the effect of working a private firm on populist voting.
+## We suppose that in post-Communist societies, private firms will encourage democratic behavior as social organization effects dominate.
+## In non-Communist countries, we suppose that private firms will increase populist voting behavior as other factors like income and class position dominate.
+
+## We also propose that individuals not working in private firms will face different incentives in the public sector. In particular,
+## when we consider the state-owned enterprise, a similarly-organized structure to the private firm, we suppose that the post-Communist context
+## relies on nationalism/patriotism/ideology/etc. while those in non-Communist countries primarily hold employees through financial incentives
+
+
+# Hungary had a relatively large private sector historically, special gulyas communism
+
+ggplot(ess_filtered %>% filter(communist10 == 1), aes(x = org_name, y = populist, color = as.factor(cntry_name == 'Hungary')))+
+  stat_summary_bin()
+
+```
+
+# developing our regression model
+```{r}
+# using a generalized linear model to predict voting and then to predict voting for a populist (among those who vote)
+# creating a centrist variable
+ess_model <- ess_filtered %>% mutate(centrist = case_when(
+  lrscale == 5 ~ 1,
+  TRUE ~0
+))
+names(ess_filtered)
+## models of voting behavior
+
+# this regression estimates the causal effect of working in a private firm (in a Communist country) on the likelihood that someone votes
+reg1 <- glm(voted ~ private + I(private*communist10) + communist10 + centrist + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + gov_type + domicil_name, ess_model, family = binomial())
+reg1 %>% summary
+
+
+reg2 <- glm(populist ~ private + I(private*communist10) + communist10 + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + domicil_name, ess_model, family = binomial())
+reg2 %>% summary
+
+
+
+
+## these results suggest tat
+
+ess_filtered %>% group_by(private, mbtru) %>% 
+  summarise(n=n()) %>% 
+  spread(mbtru, n)
+ess9$mbtru
+
+
+```
+
+
+# machine learning methods
+We will use this information to predict voting behavior among non-voters
+```{r}
+# First, we need to build our model from those who did in fact vote. 
+# We will split these data in half and then test our model on within-group predictions
+
+voters <- ess_model %>% filter(voted == 1)
+non_voters <- ess_model %>% filter(voted == 0)
+
+train_df <- voters %>% mutate(training = rbinom(n=nrow(.), size=1, prob=0.50))
+
+
+
+trained_model <- glm(populist ~ private + I(private*communist10) + communist10 + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + domicil_name, train_df %>% filter(training == 1), family = binomial())
+
+predicted <- predict.glm(trained_model, newdata = train_df %>% filter(training == 0), type = 'response')
+
+results <- rbind(train_df %>% filter(training == 1) %>% mutate(predicted = populist), cbind(train_df %>% filter(training == 0), predicted))
+
+results %>% ggplot(aes(x = hinctnta, y = predicted))+
+  stat_summary_bin(aes(color = as.factor(training)))
+
+full_preds <- predict.glm(trained_model, newdata = ess_model, type = 'response')
+
+full_results <- cbind(ess_model, full_preds)
+
+
+
+full_results %>% filter(!is.na(voted)) %>% ggplot(aes(x = org_name, y = full_preds))+
+  stat_summary_bin(aes(color = as.factor(voted), pch = as.factor(communist10)))+
+  stat_summary_bin(aes(y = populist, pch = as.factor(communist10)))
+
+
+cor(as.numeric(ess_filtered$lrscale %in% 4:6), as.numeric(ess_filtered$rlgdgr %in% 4:6), use = 'pairwise.complete.obs')
+
+
+
+ess_model %>% filter(cntry_name %in% c('Estonia','Slovenia')) %>% 
+  ggplot(aes(x = org_name, y = populist))+
+  stat_summary_bin(aes(color = cntry_name))
+
+
+
+est <- glm(populist ~ private + soe + public + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + domicil_name + gov_type, ess_model %>% filter(communist10 == 0), family = binomial())
+est %>% summary
+
+
+slov <- glm(populist ~ private + soe + public + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + domicil_name + gov_type, ess_model %>% filter(communist10 == 1), family = binomial())
+slov %>% summary
+
+
+ess_model <- ess_model %>% mutate(psoe = case_when(
+  org_name == 'Private firm' ~ 'private',
+  org_name == 'State-owned enterprise' ~ 'SOE',
+  org_name == 'Central, local government' | org_name == 'Other public sector' ~ 'public',
+  TRUE ~ 'other'
+))
+
+ess_model <- ess_model %>% mutate(soe = case_when(
+  psoe == 'SOE' ~ 1,
+  TRUE ~ 0
+))
+
+ess_model <- ess_model %>% mutate(public = case_when(
+  psoe == 'public' ~ 1,
+  TRUE ~ 0
+))
+
+ess_model %>% 
+  ggplot(aes(x = psoe, y = populist, color = as.factor(communist10)))+
+  stat_summary_bin()+
+  commcols
+
+ess_model %>% 
+  ggplot(aes(x = psoe, y = voted, color = as.factor(communist10)))+
+  stat_summary_bin()+
+  commcols
+
+ess_model %>% group_by(psoe) %>% 
+  summarise(var(lrscale, na.rm=TRUE))
+
+```
+
+
+
+
+20 sept 2022
+21:00-
+
+looking at privatization method
+
+```{r}
+## voucher, direct payment
+
+comm_df <- ess_model %>% filter(communist10 == 1) %>% 
+  mutate(pvzt = case_when(
+    cntry_name %in% c('Bulgaria', 'Slovakia', 'Lithuania','Serbia','Latvia','Estonia') ~ 'shelter',
+    cntry_name %in% c('Hungary','Poland','Czechia', 'Slovenia','Croatia') ~ 'expose',
+    TRUE ~ 'other'
+  ))
+
+
+# show this one, privatization method vs. populist voting across industry
+ess_model %>% ggplot(aes(x = psoe, y = populist)) +
+  stat_summary_bin(aes(color = as.factor(pvzt)), position = position_dodge(width = 0.3))
+
+ess_model %>%
+  ggplot(aes(x = psoe, y = mbtru)) +
+  stat_summary_bin(aes(color = as.factor(communist10)))+
+  commcols
+
+ess_model %>% 
+  ggplot(aes(x = psoe, y = voted))+
+  stat_summary_bin(aes(color = as.factor(communist10)))+
+  commcols
+
+ess_model %>% filter(soe == 1) %>%  ggplot(aes(x = mbtru, y = populist))+
+  stat_summary_bin(aes(color = as.factor(communist10)))+
+  commcols
+
+
+
+ess_model %>% filter(!is.na(nacer2)) %>% 
+  ggplot(aes(x = org_name, y = populist))+
+  stat_summary_bin(aes(linetype =as.factor(communist10), color = as.factor(nacer2 == 5 | nacer2 == 6 | nacer2 == 19)))
+
+cor(ess_model$mbtru, ess_model$communist10, use = 'pairwise.complete.obs')
+
+ess_model %>% filter(communist10 == 1) %>% group_by(cntry_name, psoe) %>% 
+  summarise(n = n()) %>% 
+  group_by(cntry_name) %>% 
+  spread(psoe, n) %>% 
+  summarise(private_prop = private/(other + private + public + SOE),
+            soe_prop = SOE/(other + private + public + SOE)) %>% 
+  arrange(-soe_prop)
+
+ess_model %>% group_by(communist10) %>% 
+  summarise(n())
+unique(comm_df$org_name)
+comm_df <- comm_df %>% mutate(expose = case_when(pvzt == 'expose' ~ 1,
+                                                 pvzt == 'shelter' ~ 0),
+                              shelter = case_when(pvzt == 'expose' ~ 0,
+                                                 pvzt == 'shelter' ~ 1))
+model1 <- lm(populist ~ private + I(private*expose) + expose + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + domicil_name + cntry_name, comm_df)
+
+cor()
+
+
+model1 <- lm(populist ~ I(private*expose) + expose + private + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + domicil_name, comm_df ) 
+model3 %>% summary
+
+model2 <- lm(populist ~ I(private*shelter) + shelter + private + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + domicil_name, comm_df ) 
+
+model3 <- lm(populist ~ I(soe*expose) + expose + soe + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + domicil_name, comm_df) 
+
+model4 <- lm(populist ~ I(private*expose) + private + expose + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + domicil_name, comm_df) 
+
+
+
+coefs4plot <- c('I(private * expose)','private','expose','mbtru','hinctnta','estsz')
+
+names(coefs4plot) <- c('private*market','private','market','union mem.','income decile','estab. size')
+
+plot_summs(model4, coefs = coefs4plot)
+
+stargazer(model1, model2,type = 'text',keep = coefs4plot)
+stargazer(model3, model4,type = 'text',keep = coefs4plot)
+
+model2 %>% summary
+
+model3 %>% summary
+library(lmtest)
+model1_robust <- coeftest(model1, 
+                          vcov = 'vcovHC')
+
+
+
+
+library(sandwich)
+m1coeffs_cl <- coeftest(model1, vcov = vcovCL, cluster = ~cntry_name)
+m1coeffs_cl
+
+library(stargazer)
+
+?stargazer
+
+library(MatchIt)
+
+vote_df <- comm_df %>% filter(voted == 1) %>% 
+  select(!c(emplno, njbspv, uemp12m, uemp5yr, jbspv,uemp3m)) %>% 
+  filter(complete.cases(.))
+
+sapply(comm_df, function(x) sum(is.na(x)))
+
+comm_df %>% view
+
+vote_df %>% dim
+
+match <- matchit(soe ~ mbtru + hinctnta + age + male + eduyrs + blgetmg + rlgdgr, data = vote_df, method = 'optimal')
+mat_df <- match.data(match)
+mat_df %>% dim
+
+
+
+model_match <- lm(populist ~ soe + I(soe*as.numeric(pvzt == 'typeB')) + as.numeric(pvzt == 'typeB') + mbtru + hinctnta + estsz + age + male + eduyrs + blgetmg + rlgdgr + inprdsc + sclmeet + sclact + domicil_name + gov_type, mat_df)
+model_match %>% summary
+
+install.packages('ggthemes')
+library(ggthemes)
+comm_df %>% ggplot(aes(x = psoe, y = populist))+
+  stat_summary_bin()+
+  xlab('Firm type')+
+  ylab('% populist')
+  
+
+comm_df %>% ggplot(aes(x= ))
+
+
+comm_df %>% 
+  ggplot(aes(x = psoe, y = populist))+
+  stat_summary_bin(aes(color = pvzt))+
+  facet_wrap(~cntry_name)
+
+comm_df %>% group_by(cntry_name, pvzt) %>% 
+  summarise(mean(populist)) %>% 
+  arrange(pvzt)
+
+comm_df %>% group_by(pvzt) %>% 
+  summarise(pop = mean(populist)) %>% 
+  spread(pvzt, pop)
+
+comm_df %>% 
+
+# communist countries summary
+unique(comm_df$cntry_name)
+
+numeric_vars <- names(comm_df %>% select_if(is.numeric))
+
+numeric_vars
+
+comm_df %>% 
+  select(numeric_vars, psoe) %>% 
+  pivot_longer(!psoe, names_to = 'variable', values_to = 'value') %>% 
+  filter(!is.na(value)) %>% 
+  ggplot(aes(x = value, color = psoe))+
+  geom_density()+
+  facet_wrap(~variable, scales = 'free')
+
+comm_df %>% group_by(psoe, pvzt) %>% 
+  summarise(v = mean(voted,na.rm=TRUE)) %>% 
+  spread(pvzt, v)
+
+comm_df %>% group_by(psoe, pvzt) %>% 
+  summarise(v = mean(populist,na.rm=TRUE)) %>% 
+  spread(pvzt, v)
+
+
+
+comm_df %>% group_by(voted) %>% 
+  summarise_all(funs(mean(.,na.rm=TRUE))) %>% View
+
+
+
+comm_long <- comm_df %>% 
+  filter(soe == 1 | private == 1) %>% 
+  select(voted, populist, private, mbtru, hinctnta, estsz, age, male, eduyrs, blgetmg, rlgdgr, inprdsc, sclmeet, sclact) %>% 
+  pivot_longer(!private, names_to = 'variable', values_to = 'value') %>% 
+  filter(!is.na(value)) %>% 
+  filter(!(variable %in% c('uempli','pdwrk','uempla')))
+
+comm_long %>% View
+
+library(rstatix)
+library(ggpubr)
+
+comm_df[numeric_vars] %>% View
+comm_long
+stat.test <- comm_long %>%
+  group_by(variable) %>%
+  t_test(value ~ private) %>%
+  adjust_pvalue(method = "BH") %>%
+  add_significance()
+stat.test %>% View
+
+comm_df
+<- %>% mutate(pvzt = case_when(
+  pvzt == 'expose' ~ 'Market',
+  pvzt == 'shelter' ~ 'State')) %>% ggplot(aes(x = psoe, y = as.numeric(mbtru==2)))+
+  stat_summary_bin()+
+  facet_wrap(~pvzt)+
+  xlab('Firm type')+
+  ylab('% populist')
+
+comm_df %>% ggplot(aes(x = pvzt, y = polit_rights_2018))+
+  stat_summary_bin()
+
+names(comm_df)
+
+comm_df %>% group_by(cntry_name) %>% summarise(pvzt) %>% slice(1)
+
+```
+# can we limit the sample to communist countries
+
+does employment in the types of firms that had FDI, changes, lead to more democratic voting over the long term? (IN COMMUNIST COUNTRIES)
+
+
+
+
+
+
+
+
+
+
+
+
+
