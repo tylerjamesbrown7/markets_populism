@@ -25,6 +25,8 @@ model15 <- lm(voteshare ~ I(Enterprise_population/pop_tot) + Business_growth_rat
 model16 <- lm(voteshare ~ I(Enterprise_population/pop_tot) + Business_growth_rate + log(pop_tot) + pop_density + educ_uni + country + as.factor(year), data = nuts3_final %>% filter(ideology == 'populist_bl' & ideo01 == 1), weights = log(pop_tot))
 model17 <- lm(voteshare ~ I(Enterprise_population/pop_tot) + Business_growth_rate + log(pop_tot) + pop_density + educ_uni + country + as.factor(year), data = nuts3_final %>% filter(ideology == 'non_democ' & ideo01 == 0), weights = log(pop_tot))
 
+summary(model14)
+
 ## with lag
 model11 <- lm(voteshare ~ I(Enterprise_population/pop_tot) + l.p + Business_growth_rate + log(pop_tot) + pop_density + educ_uni + country + as.factor(year), data = nuts3_final %>% filter(ideology == 'non_democ' & ideo01 == 1), weights = log(pop_tot))
 model12 <- lm(voteshare ~ I(Enterprise_population/pop_tot) + l.p + Business_growth_rate + log(pop_tot) + pop_density + educ_uni + country + as.factor(year), data = nuts3_final %>% filter(ideology == 'populist' & ideo01 == 1), weights = log(pop_tot))
