@@ -6,10 +6,11 @@ library(leaflet)  # interactive graphics (output does not show in RMD files)
 library(sf)
 devtools::install_github('tylerjamesbrown7/tbtools', force = TRUE)
 library(tbtools)
-library(modelsummary)
+library(readxl)
 
-slov <- slovak_data_11may
-slovak_unemployment <- slovak_unemployment %>% rename(okres = name)
+
+slov <- read_csv("input/slovakia/slovak_data_11may.csv")
+slovak_unemployment <- read_excel("input/slovak_unemployment.xlsx") %>% rename(okres = name)
 slov <- merge(slov, slovak_unemployment, by = 'okres', all.x = TRUE)
 slov <- slov %>% mutate(hung_pop = hungarian/total_pop)
 a <- slov %>% group_by(okres) %>% summarise(hung_pop = mean(hung_pop,na.rm=TRUE)) %>% pull(hung_pop)
